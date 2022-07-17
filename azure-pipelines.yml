@@ -1,0 +1,54 @@
+trigger:
+- master
+
+pool:
+  name: Default
+
+stages:
+    - stage: BuildingJavaCode
+      jobs:
+      - job: BuildingJavaCodeJob
+        timeoutInMinutes: 10
+        steps:
+        - script: echo $(Build.BuildId)
+          displayName: 'Display The Build-ID'
+
+        - script: ls -al && pwd
+          displayName: 'List Files & Current Working Directory'
+        
+        - script: ls -al && chmod 700 build.sh && sudo bash ./build.sh && ls -al
+          displayName: 'Run the build script'
+        
+        - script: ls -al && mv ROOT.war ROOT$(Build.BuildId).war && ls -al
+          displayName: 'List Files & Rename ROOT.war'
+     
+        - script: cp ROOT$(Build.BuildId).war /artifacts && ls -al /artifacts
+          displayName: 'Copy WAR to tmp folder'
+
+    - stage: CopyingArtifactsToAzureAndAws
+      jobs:
+      - job: CopyFilesToAzureBlob
+        timeoutInMinutes: 10
+        steps:
+        - checkout: none
+        - task: AzureCLI@2
+          inputs:
+            azureSubscription: 'azureb23-azure-connection'
+            scriptType: 'bash'
+            scriptLocation: 'inlineScript'
+            inlineScript: |
+              az storage blob upload-batch --account-name azureb23adoartifacts  --account-key <7BjIELfh7EIUVVw6NA4HgRT89U6fmki+h9rNk6euhesZE7E/rPnIGZVFSEjq42TIryYzlAhhgoY1+ASt48KN+g==> --destination artifacts --source /artifacts
+          displayName: 'Azure Upload artifacts to Azure Blob'
+          continueOnError: true          
+
+    - stage: DeleteTheRepo
+      jobs:
+      - job: DeleteTheRepoCntent
+        timeoutInMinutes: 10
+        steps:
+         - checkout: none
+         - script: cd /home/althaf/myagent/_work/1/s && sudo rm -rf src
+           displayName: 'Remove Files'
+
+         - script: cd /artifacts && sudo rm -f *.war
+           displayName: 'Remove Files From tmp Folder'
